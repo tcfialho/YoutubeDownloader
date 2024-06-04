@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="YoutubeDownloader.MainPage">
+
+<VerticalStackLayout Padding="20" Spacing="10">
+        <Entry x:Name="YouTubeLink" Placeholder="Enter YouTube link" />
+        <RadioButton x:Name="DownloadVideo" Content="Download Video" IsChecked="True" />
+        <RadioButton x:Name="DownloadAudio" Content="Download MP3" />
+        <Label x:Name="StatusLabel" Text="" VerticalOptions="EndAndExpand" Margin="0,10,0,0"/>
+        <Button Text="Download" Clicked="OnDownloadButtonClicked" Margin="0,10,0,0"/>
+        <Button Text="Clear" Clicked="OnClearButtonClicked" Margin="0,10,0,0"/>
+        <Button x:Name="OpenFileButton" Text="Open Downloaded File" Clicked="OnOpenFileButtonClicked" IsVisible="False" Margin="0,10,0,0"/>
+    </VerticalStackLayout>
+
+</ContentPage>
