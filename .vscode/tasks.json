@@ -1,0 +1,40 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-android",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "publish",
+                "-f",
+                "net8.0-android",
+                "-c",
+                "Release",
+                "-o",
+                "${workspaceFolder}/bin/Release/net8.0-android/publish"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "build-windows",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "publish",
+                "-f",
+                "net8.0-windows10.0.19041.0",
+                "-c",
+                "Release",
+                "-o",
+                "${workspaceFolder}/bin/Release/net8.0-windows/publish"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        }
+    ]
+}
