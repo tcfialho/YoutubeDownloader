@@ -189,6 +189,7 @@ namespace YoutubeDownloader
         {
             YouTubeLink.Text = string.Empty;
             StatusLabel.Text = string.Empty;
+            CopyPathButton.IsVisible = false;
             OpenFileButton.IsVisible = false;
         }
 
