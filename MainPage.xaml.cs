@@ -159,46 +159,37 @@ namespace YoutubeDownloader
             }
         }
 
-        private void OpenDownloadedFile(string filePath)
-        {
+     private void OpenDownloadedFile(string filePath)
+    {
 #if ANDROID
-            var file = new Java.IO.File(filePath);
-            var mimeType = GetMimeTypeFromContent(filePath);
-            var uri = FileProvider.GetUriForFile(Android.App.Application.Context, $"{Android.App.Application.Context.PackageName}.fileprovider", file);
+        var file = new Java.IO.File(filePath);
+        var extension = Path.GetExtension(filePath);
+        var mimeType = GetMimeTypeFromExtension(extension);
+        var uri = FileProvider.GetUriForFile(Android.App.Application.Context, $"{Android.App.Application.Context.PackageName}.fileprovider", file);
 
-            Intent intent = new Intent(Intent.ActionView);
-            intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
-            intent.SetDataAndType(uri, mimeType);
+        Intent intent = new Intent(Intent.ActionView);
+        intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
+        intent.SetDataAndType(uri, mimeType);
 
-            // Adiciona categorias para ajudar na seleção do app correto
-            intent.AddCategory(Intent.CategoryDefault);
-            intent.AddCategory(Intent.CategoryBrowsable);
+        // Adiciona categorias para ajudar na seleção do app correto
+        intent.AddCategory(Intent.CategoryDefault);
+        intent.AddCategory(Intent.CategoryBrowsable);
 
-            // Confirma a definição correta do tipo MIME específico para áudio ou vídeo
-            if (mimeType.StartsWith("audio/"))
-            {
-                intent.PutExtra(Intent.ExtraMimeTypes, new string[] { mimeType });
-            }
-            else if (mimeType.StartsWith("video/"))
-            {
-                intent.PutExtra(Intent.ExtraMimeTypes, new string[] { mimeType });
-            }
+        Intent chooserIntent = Intent.CreateChooser(intent, "Open With");
+        chooserIntent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
 
-            Intent chooserIntent = Intent.CreateChooser(intent, "Open With");
-            chooserIntent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
-
-            Android.App.Application.Context.StartActivity(chooserIntent);
+        Android.App.Application.Context.StartActivity(chooserIntent);
 #else
-            var process = new Process();
-            process.StartInfo = new ProcessStartInfo
-            {
-                WorkingDirectory = Path.GetDirectoryName(filePath),
-                FileName = Path.GetFileName(filePath),
-                UseShellExecute = true
-            };
-            process.Start();
+        var process = new Process();
+        process.StartInfo = new ProcessStartInfo
+        {
+            WorkingDirectory = Path.GetDirectoryName(filePath),
+            FileName = Path.GetFileName(filePath),
+            UseShellExecute = true
+        };
+        process.Start();
 #endif
-        }
+    }
 
         private string GetMimeTypeFromContent(string filePath)
         {
@@ -226,6 +217,17 @@ namespace YoutubeDownloader
                 "audio/mpeg" => "mp3",
                 "audio/mp4" => "m4a",
                 _ => null,
+            };
+        }
+
+        private string GetMimeTypeFromExtension(string extension)
+        {
+            return extension.ToLowerInvariant() switch
+            {
+                ".mp4" => "video/mp4",
+                ".m4a" => "audio/mp4",
+                ".mp3" => "audio/mpeg",
+                _ => "application/octet-stream"
             };
         }
 
