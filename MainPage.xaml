@@ -4,11 +4,14 @@
              x:Class="YoutubeDownloader.MainPage">
 
 <VerticalStackLayout Padding="20" Spacing="10">
-        <Entry x:Name="YouTubeLink" Placeholder="Enter YouTube link" />
+        <Grid ColumnDefinitions="*, Auto" RowDefinitions="Auto" ColumnSpacing="10">
+            <Entry Grid.Column="0" x:Name="YouTubeLink" Placeholder="Enter YouTube link"/>
+            <Button Grid.Column="1" x:Name="PasteButton" Text="Paste" Clicked="OnPasteButtonClicked"/>
+        </Grid>
         <RadioButton x:Name="DownloadVideo" Content="Download Video" IsChecked="True" />
         <RadioButton x:Name="DownloadAudio" Content="Download Audio" />
         <Label x:Name="StatusLabel" Text="" VerticalOptions="EndAndExpand" Margin="0,10,0,0"/>
-        <Button Text="Download" Clicked="OnDownloadButtonClicked" Margin="0,10,0,0"/>
+        <Button x:Name="DownloadButton" Text="Download" Clicked="OnDownloadButtonClicked" Margin="0,10,0,0"/>
         <Button Text="Clear" Clicked="OnClearButtonClicked" Margin="0,10,0,0"/>
         <Button x:Name="OpenFileButton" Text="Open Downloaded File" Clicked="OnOpenFileButtonClicked" IsVisible="False" Margin="0,10,0,0"/>
         <Button x:Name="CopyPathButton" Text="Copy File Path" Clicked="OnCopyPathButtonClicked" IsVisible="False" Margin="0,10,0,0"/>
