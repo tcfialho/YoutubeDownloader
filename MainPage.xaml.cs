@@ -4,14 +4,16 @@ using System.Text.RegularExpressions;
 using System.IO;
 using MimeDetective;
 using MimeDetective.Definitions;
+using System.Threading;
+using System.Diagnostics;
 
 #if ANDROID
 using Android.Content;
+using Android.Views.InputMethods;
 using AndroidX.Core.App;
 using AndroidX.Core.Content;
 using FileProvider = Microsoft.Maui.Storage.FileProvider;
 #endif
-using System.Diagnostics;
 
 namespace YoutubeDownloader
 {
@@ -19,6 +21,7 @@ namespace YoutubeDownloader
     {
         private string _downloadedFilePath;
         private readonly ContentInspector _inspector;
+        private CancellationTokenSource _cancellationTokenSource;
 
         public MainPage()
         {
@@ -31,6 +34,8 @@ namespace YoutubeDownloader
 
         private async void OnDownloadButtonClicked(object sender, EventArgs e)
         {
+            CloseKeyboard();
+
             string url = YouTubeLink.Text;
             bool isVideo = DownloadVideo.IsChecked;
 
@@ -40,24 +45,46 @@ namespace YoutubeDownloader
                 return;
             }
 
+            // Desabilita a caixa de texto e os botões
+            YouTubeLink.IsEnabled = false;
+            DownloadButton.IsEnabled = false;
+            PasteButton.IsEnabled = false;
+            DownloadButton.Text = "Downloading...";
+
             StatusLabel.Text = "Downloading...";
             OpenFileButton.IsVisible = false;
             CopyPathButton.IsVisible = false;
 
+            // Inicializa o CancellationTokenSource
+            _cancellationTokenSource = new CancellationTokenSource();
+
             try
             {
-                await DownloadYouTubeContent(url, isVideo);
+                await DownloadYouTubeContent(url, isVideo, _cancellationTokenSource.Token);
                 StatusLabel.Text = "Download complete!";
                 OpenFileButton.IsVisible = true;
                 CopyPathButton.IsVisible = true;
+            }
+            catch (OperationCanceledException)
+            {
+                StatusLabel.Text = "Download canceled.";
             }
             catch (Exception ex)
             {
                 StatusLabel.Text = $"Error: {ex.Message}";
             }
+            finally
+            {
+                // Habilita a caixa de texto e os botões ao finalizar
+                YouTubeLink.IsEnabled = true;
+                DownloadButton.IsEnabled = true;
+                PasteButton.IsEnabled = true;
+                DownloadButton.Text = "Download";
+                _cancellationTokenSource = null;
+            }
         }
 
-        private async Task DownloadYouTubeContent(string url, bool isVideo)
+        private async Task DownloadYouTubeContent(string url, bool isVideo, CancellationToken cancellationToken)
         {
             var youtube = new YoutubeClient();
 
@@ -71,7 +98,7 @@ namespace YoutubeDownloader
             streamManifest = await Task.Run(async () =>
             {
                 return await youtube.Videos.Streams.GetManifestAsync(video.Id);
-            });
+            }, cancellationToken);
 
             // Select streams
             IStreamInfo streamInfo;
@@ -95,7 +122,7 @@ namespace YoutubeDownloader
             var tempFilePath = Path.Combine(downloadsPath, tempFileName);
 
             // Download stream to a temporary file
-            await youtube.Videos.Streams.DownloadAsync(streamInfo, tempFilePath);
+            await youtube.Videos.Streams.DownloadAsync(streamInfo, tempFilePath, default, cancellationToken);
 
             // Determine MIME type and proper extension
             string mimeType = GetMimeTypeFromContent(tempFilePath);
@@ -109,6 +136,12 @@ namespace YoutubeDownloader
             var finalFileName = $"{SanitizeFileName(video.Title)}.{extension}";
             var finalFilePath = Path.Combine(downloadsPath, finalFileName);
 
+            // Remove existing file if it exists
+            if (File.Exists(finalFilePath))
+            {
+                File.Delete(finalFilePath);
+            }
+
             // Rename the temporary file to the final file name
             File.Move(tempFilePath, finalFilePath);
 
@@ -118,6 +151,8 @@ namespace YoutubeDownloader
 
         private void OnOpenFileButtonClicked(object sender, EventArgs e)
         {
+            CloseKeyboard();
+
             if (!string.IsNullOrEmpty(_downloadedFilePath))
             {
                 OpenDownloadedFile(_downloadedFilePath);
@@ -134,6 +169,20 @@ namespace YoutubeDownloader
             Intent intent = new Intent(Intent.ActionView);
             intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
             intent.SetDataAndType(uri, mimeType);
+
+            // Adiciona categorias para ajudar na seleção do app correto
+            intent.AddCategory(Intent.CategoryDefault);
+            intent.AddCategory(Intent.CategoryBrowsable);
+
+            // Confirma a definição correta do tipo MIME específico para áudio ou vídeo
+            if (mimeType.StartsWith("audio/"))
+            {
+                intent.PutExtra(Intent.ExtraMimeTypes, new string[] { mimeType });
+            }
+            else if (mimeType.StartsWith("video/"))
+            {
+                intent.PutExtra(Intent.ExtraMimeTypes, new string[] { mimeType });
+            }
 
             Intent chooserIntent = Intent.CreateChooser(intent, "Open With");
             chooserIntent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
@@ -155,7 +204,18 @@ namespace YoutubeDownloader
         {
             var results = _inspector.Inspect(filePath);
 
-            return results.ByMimeType().FirstOrDefault()?.MimeType  ?? "application/octet-stream";
+            // Retorna o primeiro tipo MIME detectado
+            var mimeType = results.ByMimeType().FirstOrDefault()?.MimeType;
+
+            // Adiciona um log para verificar o tipo MIME detectado
+            Debug.WriteLine($"Detected MIME type: {mimeType}");
+
+            if (string.IsNullOrEmpty(mimeType))
+            {
+                mimeType = "application/octet-stream"; // Tipo MIME padrão para conteúdo desconhecido
+            }
+
+            return mimeType;
         }
 
         private string GetExtensionFromMimeType(string mimeType)
@@ -185,16 +245,72 @@ namespace YoutubeDownloader
             return sanitizedFileName;
         }
 
+        private async void OnPasteButtonClicked(object sender, EventArgs e)
+        {
+            CloseKeyboard();
+
+            // Desabilita a caixa de texto e os botões
+            YouTubeLink.IsEnabled = false;
+            DownloadButton.IsEnabled = false;
+            PasteButton.IsEnabled = false;
+
+            try
+            {
+#if ANDROID
+                var clipboard = (ClipboardManager)Android.App.Application.Context.GetSystemService(Context.ClipboardService);
+                if (clipboard.HasPrimaryClip && clipboard.PrimaryClip.Description.HasMimeType(ClipDescription.MimetypeTextPlain))
+                {
+                    var item = clipboard.PrimaryClip.GetItemAt(0);
+                    YouTubeLink.Text = item.Text;
+                }
+#elif WINDOWS
+                var text = await Clipboard.Default.GetTextAsync();
+                if (!string.IsNullOrEmpty(text))
+                {
+                    YouTubeLink.Text = text;
+                }
+#endif
+            }
+            catch (Exception ex)
+            {
+                StatusLabel.Text = $"Error: {ex.Message}";
+            }
+            finally
+            {
+                // Habilita a caixa de texto e os botões ao finalizar
+                YouTubeLink.IsEnabled = true;
+                DownloadButton.IsEnabled = true;
+                PasteButton.IsEnabled = true;
+            }
+        }
+
         private void OnClearButtonClicked(object sender, EventArgs e)
         {
+            CloseKeyboard();
+
+            // Cancela o download em andamento
+            if (_cancellationTokenSource != null)
+            {
+                _cancellationTokenSource.Cancel();
+                _cancellationTokenSource = null;
+            }
+
             YouTubeLink.Text = string.Empty;
             StatusLabel.Text = string.Empty;
             CopyPathButton.IsVisible = false;
             OpenFileButton.IsVisible = false;
+
+            // Habilita a caixa de texto e os botões
+            YouTubeLink.IsEnabled = true;
+            DownloadButton.IsEnabled = true;
+            PasteButton.IsEnabled = true;
+            DownloadButton.Text = "Download";
         }
 
-        private async void OnCopyPathButtonClicked(object sender, EventArgs e)
+        private void OnCopyPathButtonClicked(object sender, EventArgs e)
         {
+            CloseKeyboard();
+
             if (!string.IsNullOrEmpty(_downloadedFilePath))
             {
 #if ANDROID
@@ -202,10 +318,23 @@ namespace YoutubeDownloader
                 var clip = ClipData.NewPlainText("File Path", _downloadedFilePath);
                 clipboard.PrimaryClip = clip;
 #elif WINDOWS
-                await Clipboard.Default.SetTextAsync(_downloadedFilePath);
+                Clipboard.Default.SetTextAsync(_downloadedFilePath);
 #endif
                 StatusLabel.Text = "File path copied to clipboard!";
             }
+        }
+
+        private void CloseKeyboard()
+        {
+#if ANDROID
+            var inputMethodManager = (InputMethodManager)Android.App.Application.Context.GetSystemService(Context.InputMethodService);
+            var currentFocus = (Android.App.Application.Context as MainActivity)?.CurrentFocus;
+            if (currentFocus != null)
+            {
+                inputMethodManager.HideSoftInputFromWindow(currentFocus.WindowToken, HideSoftInputFlags.None);
+                currentFocus.ClearFocus();
+            }
+#endif
         }
     }
 }
