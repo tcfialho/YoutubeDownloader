@@ -2,7 +2,38 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build-android",
+            "label": "build-android-debug",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "-f",
+                "net8.0-android",
+                "-c",
+                "Debug"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "build-windows-debug",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "-f",
+                "net8.0-windows10.0.19041.0",
+                "-c",
+                "Debug"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": "build"
+        },
+        {
+            "label": "build-android-release",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -14,14 +45,11 @@
                 "-o",
                 "${workspaceFolder}/bin/Release/net8.0-android/publish"
             ],
-            "problemMatcher": [],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
+            "problemMatcher": "$msCompile",
+            "group": "build"
         },
         {
-            "label": "build-windows",
+            "label": "build-windows-release",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -33,7 +61,7 @@
                 "-o",
                 "${workspaceFolder}/bin/Release/net8.0-windows/publish"
             ],
-            "problemMatcher": [],
+            "problemMatcher": "$msCompile",
             "group": "build"
         }
     ]

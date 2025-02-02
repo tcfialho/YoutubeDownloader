@@ -1,14 +1,32 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": ".NET MAUI",
-            "type": "maui",
+            "name": ".NET MAUI Windows",
+            "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "maui: Build"
+            "preLaunchTask": "build-windows-debug",
+            "program": "${workspaceFolder}/bin/Debug/net8.0-windows10.0.19041.0/win10-x64/YoutubeDownloader.dll",
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": ".NET MAUI Android",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-android-debug",
+            "program": "dotnet",
+            "args": [
+                "build",
+                "-f",
+                "net8.0-android",
+                "-c",
+                "Debug"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "stopAtEntry": false
         }
     ]
 }
