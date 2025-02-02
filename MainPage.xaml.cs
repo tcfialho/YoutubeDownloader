@@ -1,9 +1,12 @@
-﻿using YoutubeExplode;
+using YoutubeExplode;
 using YoutubeExplode.Videos.Streams;
 using System.Text.RegularExpressions;
 using System.IO;
+#if ANDROID
 using MimeDetective;
 using MimeDetective.Definitions;
+using MimeDetective.Engine;
+#endif
 using System.Threading;
 using System.Diagnostics;
 
@@ -20,16 +23,17 @@ namespace YoutubeDownloader
     public partial class MainPage : ContentPage
     {
         private string _downloadedFilePath;
-        private readonly ContentInspector _inspector;
+        private readonly dynamic _inspector;
         private CancellationTokenSource _cancellationTokenSource;
 
         public MainPage()
         {
             InitializeComponent();
-            _inspector = new ContentInspectorBuilder()
-            {
-                Definitions = MimeDetective.Definitions.Default.All()
-            }.Build();
+#if ANDROID
+            _inspector = new MimeDetective.ContentInspectorBuilder().Build();
+#else
+            _inspector = null;
+#endif
         }
 
         private async void OnDownloadButtonClicked(object sender, EventArgs e)
