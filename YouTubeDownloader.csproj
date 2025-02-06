@@ -1,8 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0-android</TargetFrameworks>
-        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
+        <TargetFrameworks>net9.0-android</TargetFrameworks>
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net9.0-windows10.0.19041.0</TargetFrameworks>
         <OutputType>Exe</OutputType>
         <RootNamespace>YoutubeDownloader</RootNamespace>
         <UseMaui>true</UseMaui>
@@ -45,15 +45,21 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.3" />
-        <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.0.3" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Maui.Controls" Version="9.0.30" />
+        <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="9.0.30" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.1" />
         <PackageReference Include="Mime-Detective" Version="24.12.2" />
     </ItemGroup>
     
     <ItemGroup>
         <PackageReference Include="NAudio" Version="2.2.1" />
-        <PackageReference Include="YoutubeExplode" Version="6.5.2" />
+        <PackageReference Include="SharpCompress" Version="0.36.0" />
+        <PackageReference Include="YoutubeExplode" Version="6.5.3" />
+        <PackageReference Include="YoutubeExplode.Converter" Version="6.5.3" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Resources\Raw\ffmpeg.7z" />
     </ItemGroup>
 
 </Project>
