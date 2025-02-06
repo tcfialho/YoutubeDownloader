@@ -95,7 +95,9 @@ namespace YoutubeDownloader
         {
             var youtube = new YoutubeClient();
             var video = await youtube.Videos.GetAsync(url);
-            var streamManifest = await youtube.Videos.Streams.GetManifestAsync(video.Id);
+
+            // Obtém o StreamManifest fora da thread principal
+            var streamManifest = await Task.Run(() => youtube.Videos.Streams.GetManifestAsync(video.Id).AsTask());
 
             // Define o caminho de download
             string downloadsPath;
@@ -104,6 +106,12 @@ namespace YoutubeDownloader
 #else
             downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
 #endif
+
+            // Verifica se o FFmpeg existe antes de iniciar o download
+            if (!File.Exists(MauiProgram.FFmpegPath))
+            {
+                throw new FileNotFoundException($"FFmpeg não encontrado no caminho: {MauiProgram.FFmpegPath}");
+            }
 
             if (isVideo)
             {
