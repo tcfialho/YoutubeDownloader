@@ -6,7 +6,14 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build-windows-debug",
-            "program": "${workspaceFolder}/bin/Debug/net8.0-windows10.0.19041.0/win10-x64/YoutubeDownloader.dll",
+            "program": "dotnet",
+            "args": [
+                "run",
+                "-f",
+                "net9.0-windows10.0.19041.0",
+                "-c",
+                "Debug"
+            ],
             "cwd": "${workspaceFolder}",
             "console": "internalConsole",
             "stopAtEntry": false
@@ -20,7 +27,7 @@
             "args": [
                 "build",
                 "-f",
-                "net8.0-android",
+                "net9.0-android",
                 "-c",
                 "Debug"
             ],
