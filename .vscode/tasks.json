@@ -8,7 +8,7 @@
             "args": [
                 "build",
                 "-f",
-                "net8.0-android",
+                "net9.0-android",
                 "-c",
                 "Debug"
             ],
@@ -25,7 +25,7 @@
             "args": [
                 "build",
                 "-f",
-                "net8.0-windows10.0.19041.0",
+                "net9.0-windows10.0.19041.0",
                 "-c",
                 "Debug"
             ],
@@ -39,11 +39,11 @@
             "args": [
                 "publish",
                 "-f",
-                "net8.0-android",
+                "net9.0-android",
                 "-c",
                 "Release",
                 "-o",
-                "${workspaceFolder}/bin/Release/net8.0-android/publish"
+                "${workspaceFolder}/bin/Release/net9.0-android/publish"
             ],
             "problemMatcher": "$msCompile",
             "group": "build"
@@ -55,11 +55,11 @@
             "args": [
                 "publish",
                 "-f",
-                "net8.0-windows10.0.19041.0",
+                "net9.0-windows10.0.19041.0",
                 "-c",
                 "Release",
                 "-o",
-                "${workspaceFolder}/bin/Release/net8.0-windows/publish"
+                "${workspaceFolder}/bin/Release/net9.0-windows/publish"
             ],
             "problemMatcher": "$msCompile",
             "group": "build"
