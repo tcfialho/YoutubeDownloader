@@ -1,18 +1,19 @@
 using YoutubeExplode;
 using YoutubeExplode.Videos.Streams;
+using YoutubeExplode.Converter;
 using System.Text.RegularExpressions;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Diagnostics;
+using System.Linq;
 #if ANDROID
 using MimeDetective;
 using MimeDetective.Definitions;
 using MimeDetective.Engine;
-#endif
-using System.Threading;
-using System.Diagnostics;
-
-#if ANDROID
 using Android.Content;
 using Android.Views.InputMethods;
+using Android.App;
 using AndroidX.Core.App;
 using AndroidX.Core.Content;
 using FileProvider = Microsoft.Maui.Storage.FileProvider;
@@ -23,7 +24,11 @@ namespace YoutubeDownloader
     public partial class MainPage : ContentPage
     {
         private string _downloadedFilePath;
+#if ANDROID
         private readonly dynamic _inspector;
+#else
+        private readonly dynamic _inspector;
+#endif
         private CancellationTokenSource _cancellationTokenSource;
 
         public MainPage()
@@ -49,17 +54,15 @@ namespace YoutubeDownloader
                 return;
             }
 
-            // Desabilita a caixa de texto e os botões
+            // Desabilita os controles
             YouTubeLink.IsEnabled = false;
             DownloadButton.IsEnabled = false;
             PasteButton.IsEnabled = false;
             DownloadButton.Text = "Downloading...";
-
             StatusLabel.Text = "Downloading...";
             OpenFileButton.IsVisible = false;
             CopyPathButton.IsVisible = false;
 
-            // Inicializa o CancellationTokenSource
             _cancellationTokenSource = new CancellationTokenSource();
 
             try
@@ -79,7 +82,7 @@ namespace YoutubeDownloader
             }
             finally
             {
-                // Habilita a caixa de texto e os botões ao finalizar
+                // Reabilita os controles
                 YouTubeLink.IsEnabled = true;
                 DownloadButton.IsEnabled = true;
                 PasteButton.IsEnabled = true;
@@ -91,66 +94,50 @@ namespace YoutubeDownloader
         private async Task DownloadYouTubeContent(string url, bool isVideo, CancellationToken cancellationToken)
         {
             var youtube = new YoutubeClient();
-
-            // Get video info
             var video = await youtube.Videos.GetAsync(url);
+            var streamManifest = await youtube.Videos.Streams.GetManifestAsync(video.Id);
 
-            // Define a variável streamManifest
-            StreamManifest streamManifest = null;
-
-            // Use Task.Run para executar a operação assíncrona
-            streamManifest = await Task.Run(async () =>
-            {
-                return await youtube.Videos.Streams.GetManifestAsync(video.Id);
-            }, cancellationToken);
-
-            // Select streams
-            IStreamInfo streamInfo;
-            if (isVideo)
-            {
-                streamInfo = streamManifest.GetMuxedStreams().GetWithHighestVideoQuality();
-            }
-            else
-            {
-                streamInfo = streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
-            }
-
-            // Set file path to Downloads folder
+            // Define o caminho de download
             string downloadsPath;
 #if ANDROID
             downloadsPath = Path.Combine(Android.OS.Environment.GetExternalStoragePublicDirectory(Android.OS.Environment.DirectoryDownloads).AbsolutePath);
 #else
             downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
 #endif
-            var tempFileName = $"{SanitizeFileName(video.Title)}.tmp";
-            var tempFilePath = Path.Combine(downloadsPath, tempFileName);
 
-            // Download stream to a temporary file
-            await youtube.Videos.Streams.DownloadAsync(streamInfo, tempFilePath, default, cancellationToken);
-
-            // Determine MIME type and proper extension
-            string mimeType = GetMimeTypeFromContent(tempFilePath);
-            string extension = GetExtensionFromMimeType(mimeType);
-
-            if (string.IsNullOrEmpty(extension))
+            if (isVideo)
             {
-                extension = isVideo ? "mp4" : "m4a";
+                // Seleciona os melhores streams de áudio e vídeo (filtra para container MP4)
+                var audioStream = streamManifest.GetAudioStreams()
+                    .Where(s => s.Container == Container.Mp4)
+                    .GetWithHighestBitrate();
+                var videoStream = streamManifest.GetVideoStreams()
+                    .Where(s => s.Container == Container.Mp4)
+                    .GetWithHighestVideoQuality();
+
+                var streams = new IStreamInfo[] { audioStream, videoStream };
+                var outputFileName = $"{SanitizeFileName(video.Title)}.mp4";
+                var finalFilePath = Path.Combine(downloadsPath, outputFileName);
+
+                // Baixa e realiza o muxing via FFmpeg usando o caminho configurado
+                await youtube.Videos.DownloadAsync(streams, new ConversionRequestBuilder(finalFilePath)
+                    .SetFFmpegPath(MauiProgram.FFmpegPath)
+                    .Build());
+                _downloadedFilePath = finalFilePath;
             }
-
-            var finalFileName = $"{SanitizeFileName(video.Title)}.{extension}";
-            var finalFilePath = Path.Combine(downloadsPath, finalFileName);
-
-            // Remove existing file if it exists
-            if (File.Exists(finalFilePath))
+            else
             {
-                File.Delete(finalFilePath);
+                // Áudio apenas: seleciona o melhor stream de áudio disponível
+                var audioStream = streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
+                var streams = new IStreamInfo[] { audioStream };
+                var outputFileName = $"{SanitizeFileName(video.Title)}.mp3";
+                var finalFilePath = Path.Combine(downloadsPath, outputFileName);
+
+                await youtube.Videos.DownloadAsync(streams, new ConversionRequestBuilder(finalFilePath)
+                    .SetFFmpegPath(MauiProgram.FFmpegPath)
+                    .Build());
+                _downloadedFilePath = finalFilePath;
             }
-
-            // Rename the temporary file to the final file name
-            File.Move(tempFilePath, finalFilePath);
-
-            // Store the file path for later use
-            _downloadedFilePath = finalFilePath;
         }
 
         private void OnOpenFileButtonClicked(object sender, EventArgs e)
@@ -163,51 +150,48 @@ namespace YoutubeDownloader
             }
         }
 
-     private void OpenDownloadedFile(string filePath)
-    {
-#if ANDROID
-        var file = new Java.IO.File(filePath);
-        var extension = Path.GetExtension(filePath);
-        var mimeType = GetMimeTypeFromExtension(extension);
-        var uri = FileProvider.GetUriForFile(Android.App.Application.Context, $"{Android.App.Application.Context.PackageName}.fileprovider", file);
-
-        Intent intent = new Intent(Intent.ActionView);
-        intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
-        intent.SetDataAndType(uri, mimeType);
-
-        // Adiciona categorias para ajudar na seleção do app correto
-        intent.AddCategory(Intent.CategoryDefault);
-        intent.AddCategory(Intent.CategoryBrowsable);
-
-        Intent chooserIntent = Intent.CreateChooser(intent, "Open With");
-        chooserIntent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
-
-        Android.App.Application.Context.StartActivity(chooserIntent);
-#else
-        var process = new Process();
-        process.StartInfo = new ProcessStartInfo
+        private void OpenDownloadedFile(string filePath)
         {
-            WorkingDirectory = Path.GetDirectoryName(filePath),
-            FileName = Path.GetFileName(filePath),
-            UseShellExecute = true
-        };
-        process.Start();
+#if ANDROID
+            var file = new Java.IO.File(filePath);
+            var extension = Path.GetExtension(filePath);
+            var mimeType = GetMimeTypeFromExtension(extension);
+            var uri = FileProvider.GetUriForFile(Android.App.Application.Context, $"{Android.App.Application.Context.PackageName}.fileprovider", file);
+
+            Intent intent = new Intent(Intent.ActionView);
+            intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
+            intent.SetDataAndType(uri, mimeType);
+
+            // Adiciona categorias para ajudar na seleção do app correto
+            intent.AddCategory(Intent.CategoryDefault);
+            intent.AddCategory(Intent.CategoryBrowsable);
+
+            Intent chooserIntent = Intent.CreateChooser(intent, "Open With");
+            chooserIntent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
+
+            Android.App.Application.Context.StartActivity(chooserIntent);
+#else
+            var process = new Process();
+            process.StartInfo = new ProcessStartInfo
+            {
+                WorkingDirectory = Path.GetDirectoryName(filePath),
+                FileName = Path.GetFileName(filePath),
+                UseShellExecute = true
+            };
+            process.Start();
 #endif
-    }
+        }
 
         private string GetMimeTypeFromContent(string filePath)
         {
             var results = _inspector.Inspect(filePath);
-
             // Retorna o primeiro tipo MIME detectado
             var mimeType = results.ByMimeType().FirstOrDefault()?.MimeType;
-
-            // Adiciona um log para verificar o tipo MIME detectado
             Debug.WriteLine($"Detected MIME type: {mimeType}");
 
             if (string.IsNullOrEmpty(mimeType))
             {
-                mimeType = "application/octet-stream"; // Tipo MIME padrão para conteúdo desconhecido
+                mimeType = "application/octet-stream";
             }
 
             return mimeType;
@@ -237,17 +221,13 @@ namespace YoutubeDownloader
 
         private string SanitizeFileName(string fileName)
         {
-            // Substituir caracteres não permitidos
             var allowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
             var sanitizedFileName = new string(fileName.Select(c => allowedChars.Contains(c) ? c : '_').ToArray());
-
-            // Limitar o tamanho do nome do arquivo
             const int maxLength = 100;
             if (sanitizedFileName.Length > maxLength)
             {
                 sanitizedFileName = sanitizedFileName.Substring(0, maxLength);
             }
-
             return sanitizedFileName;
         }
 
@@ -255,7 +235,7 @@ namespace YoutubeDownloader
         {
             CloseKeyboard();
 
-            // Desabilita a caixa de texto e os botões
+            // Desabilita os controles
             YouTubeLink.IsEnabled = false;
             DownloadButton.IsEnabled = false;
             PasteButton.IsEnabled = false;
@@ -263,12 +243,15 @@ namespace YoutubeDownloader
             try
             {
 #if ANDROID
-                var clipboard = (ClipboardManager)Android.App.Application.Context.GetSystemService(Context.ClipboardService);
-                if (clipboard.HasPrimaryClip && clipboard.PrimaryClip.Description.HasMimeType(ClipDescription.MimetypeTextPlain))
+                await Task.Run(() =>
                 {
-                    var item = clipboard.PrimaryClip.GetItemAt(0);
-                    YouTubeLink.Text = item.Text;
-                }
+                    var clipboard = (ClipboardManager)Android.App.Application.Context.GetSystemService(Context.ClipboardService);
+                    if (clipboard.HasPrimaryClip && clipboard.PrimaryClip.Description.HasMimeType(ClipDescription.MimetypeTextPlain))
+                    {
+                        var item = clipboard.PrimaryClip.GetItemAt(0);
+                        MainThread.BeginInvokeOnMainThread(() => YouTubeLink.Text = item.Text);
+                    }
+                });
 #elif WINDOWS
                 var text = await Clipboard.Default.GetTextAsync();
                 if (!string.IsNullOrEmpty(text))
@@ -283,7 +266,7 @@ namespace YoutubeDownloader
             }
             finally
             {
-                // Habilita a caixa de texto e os botões ao finalizar
+                // Reabilita os controles
                 YouTubeLink.IsEnabled = true;
                 DownloadButton.IsEnabled = true;
                 PasteButton.IsEnabled = true;
@@ -306,25 +289,28 @@ namespace YoutubeDownloader
             CopyPathButton.IsVisible = false;
             OpenFileButton.IsVisible = false;
 
-            // Habilita a caixa de texto e os botões
+            // Reabilita os controles
             YouTubeLink.IsEnabled = true;
             DownloadButton.IsEnabled = true;
             PasteButton.IsEnabled = true;
             DownloadButton.Text = "Download";
         }
 
-        private void OnCopyPathButtonClicked(object sender, EventArgs e)
+        private async void OnCopyPathButtonClicked(object sender, EventArgs e)
         {
             CloseKeyboard();
 
             if (!string.IsNullOrEmpty(_downloadedFilePath))
             {
 #if ANDROID
-                var clipboard = (ClipboardManager)Android.App.Application.Context.GetSystemService(Context.ClipboardService);
-                var clip = ClipData.NewPlainText("File Path", _downloadedFilePath);
-                clipboard.PrimaryClip = clip;
+                await Task.Run(() =>
+                {
+                    var clipboard = (ClipboardManager)Android.App.Application.Context.GetSystemService(Context.ClipboardService);
+                    var clip = ClipData.NewPlainText("File Path", _downloadedFilePath);
+                    clipboard.PrimaryClip = clip;
+                });
 #elif WINDOWS
-                Clipboard.Default.SetTextAsync(_downloadedFilePath);
+                await Clipboard.Default.SetTextAsync(_downloadedFilePath);
 #endif
                 StatusLabel.Text = "File path copied to clipboard!";
             }
