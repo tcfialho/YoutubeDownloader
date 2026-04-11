@@ -107,45 +107,60 @@ namespace YoutubeDownloader
             downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
 #endif
 
-            // Verifica se o FFmpeg existe antes de iniciar o download
-            if (!File.Exists(MauiProgram.FFmpegPath))
-            {
-                throw new FileNotFoundException($"FFmpeg não encontrado no caminho: {MauiProgram.FFmpegPath}");
-            }
+        // Verifica FFmpeg apenas no Windows (Android usa stream muxed sem FFmpeg)
+#if WINDOWS
+        if (isVideo && !File.Exists(MauiProgram.FFmpegPath))
+        {
+            throw new InvalidOperationException("Download de vídeo requer FFmpeg. Reinstale o aplicativo.");
+        }
+#endif
 
-            if (isVideo)
-            {
-                // Seleciona os melhores streams de áudio e vídeo (filtra para container MP4)
-                var audioStream = streamManifest.GetAudioStreams()
-                    .Where(s => s.Container == Container.Mp4)
-                    .GetWithHighestBitrate();
-                var videoStream = streamManifest.GetVideoStreams()
-                    .Where(s => s.Container == Container.Mp4)
-                    .GetWithHighestVideoQuality();
+        if (isVideo)
+        {
+#if ANDROID
+            // Android: usa stream muxed (vídeo+áudio pré-combinados), sem FFmpeg.
+            // Qualidade limitada a ~480p (restrição do YouTube para streams muxed).
+            var muxedStream = streamManifest.GetMuxedStreams()
+                .Where(s => s.Container == Container.Mp4)
+                .GetWithHighestVideoQuality();
 
-                var streams = new IStreamInfo[] { audioStream, videoStream };
-                var outputFileName = $"{SanitizeFileName(video.Title)}.mp4";
-                var finalFilePath = Path.Combine(downloadsPath, outputFileName);
+            if (muxedStream == null)
+                throw new InvalidOperationException("Nenhum stream de vídeo disponível para este vídeo.");
 
-                // Baixa e realiza o muxing via FFmpeg usando o caminho configurado
-                await youtube.Videos.DownloadAsync(streams, new ConversionRequestBuilder(finalFilePath)
-                    .SetFFmpegPath(MauiProgram.FFmpegPath)
-                    .Build());
-                _downloadedFilePath = finalFilePath;
-            }
-            else
-            {
-                // Áudio apenas: seleciona o melhor stream de áudio disponível
-                var audioStream = streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
-                var streams = new IStreamInfo[] { audioStream };
-                var outputFileName = $"{SanitizeFileName(video.Title)}.mp3";
-                var finalFilePath = Path.Combine(downloadsPath, outputFileName);
+            var outputFileName = $"{SanitizeFileName(video.Title)}.mp4";
+            var finalFilePath = Path.Combine(downloadsPath, outputFileName);
 
-                await youtube.Videos.DownloadAsync(streams, new ConversionRequestBuilder(finalFilePath)
-                    .SetFFmpegPath(MauiProgram.FFmpegPath)
-                    .Build());
-                _downloadedFilePath = finalFilePath;
-            }
+            await youtube.Videos.Streams.DownloadAsync(muxedStream, finalFilePath, cancellationToken: cancellationToken);
+            _downloadedFilePath = finalFilePath;
+#else
+            // Windows: usa FFmpeg para muxing de streams separados (qualidade HD).
+            var audioStream = streamManifest.GetAudioStreams()
+                .Where(s => s.Container == Container.Mp4)
+                .GetWithHighestBitrate();
+            var videoStream = streamManifest.GetVideoStreams()
+                .Where(s => s.Container == Container.Mp4)
+                .GetWithHighestVideoQuality();
+
+            var streams = new IStreamInfo[] { audioStream, videoStream };
+            var outputFileName = $"{SanitizeFileName(video.Title)}.mp4";
+            var finalFilePath = Path.Combine(downloadsPath, outputFileName);
+
+            await youtube.Videos.DownloadAsync(streams, new ConversionRequestBuilder(finalFilePath)
+                .SetFFmpegPath(MauiProgram.FFmpegPath)
+                .Build(), cancellationToken: cancellationToken);
+            _downloadedFilePath = finalFilePath;
+#endif
+        }
+        else
+        {
+            // Áudio: download direto do stream nativo (.m4a), SEM FFmpeg
+            var audioStream = streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
+            var outputFileName = $"{SanitizeFileName(video.Title)}.m4a";
+            var finalFilePath = Path.Combine(downloadsPath, outputFileName);
+
+            await youtube.Videos.Streams.DownloadAsync(audioStream, finalFilePath, cancellationToken: cancellationToken);
+            _downloadedFilePath = finalFilePath;
+        }
         }
 
         private void OnOpenFileButtonClicked(object sender, EventArgs e)
