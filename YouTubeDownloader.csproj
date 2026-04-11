@@ -55,11 +55,19 @@
     <ItemGroup>
         <PackageReference Include="NAudio" Version="2.2.1" />
         <PackageReference Include="SharpCompress" Version="0.36.0" />
-        <PackageReference Include="YoutubeExplode" Version="6.5.3" />
-        <PackageReference Include="YoutubeExplode.Converter" Version="6.5.3" />
+        <PackageReference Include="YoutubeExplode" Version="6.5.7" />
+        <PackageReference Include="YoutubeExplode.Converter" Version="6.5.7" />
     </ItemGroup>
 
     <ItemGroup>
+        <EmbeddedResource Remove="Resources\Raw\ffmpeg.7z" />
+        <Compile Remove="TestTool\**\*" />
+        <None Remove="TestTool\**\*" />
+        <EmbeddedResource Remove="TestTool\**\*" />
+    </ItemGroup>
+
+    <!-- FFmpeg como EmbeddedResource apenas no Windows (Android usa download direto sem FFmpeg) -->
+    <ItemGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
         <EmbeddedResource Include="Resources\Raw\ffmpeg.7z" />
     </ItemGroup>
 
